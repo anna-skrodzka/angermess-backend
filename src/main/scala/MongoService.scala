@@ -3,18 +3,17 @@ import org.bson.Document
 import scala.jdk.CollectionConverters.*
 
 object MongoService:
-  def insert(json: String): Unit =
+  def insert(json: String, room: String): Unit =
     try
       val doc = Document.parse(json)
+      doc.put("room", room)
       messages.insertOne(doc)
-      println("Saved to MongoDB")
-    catch {
-      case e: Exception => println(s"Mongo insert error: ${e.getMessage}")
-    }
+    catch case e: Exception => println(s"Insert failed: ${e.getMessage}")
 
-  def loadHistory(limit: Int = 10): List[String] =
+  def loadHistory(room: String, limit: Int = 10): List[String] =
+    println(s"Loading history for room: $room")
     try
-      messages.find()
+      messages.find(new Document("room", room))
         .sort(new Document("_id", -1))
         .limit(limit)
         .into(new java.util.ArrayList[Document]())
@@ -22,8 +21,7 @@ object MongoService:
         .toList
         .reverse
         .map(_.toJson())
-    catch {
+    catch
       case e: Exception =>
-        println(s"Error loading history: ${e.getMessage}")
+        println(s"History load error: ${e.getMessage}")
         List()
-    }
