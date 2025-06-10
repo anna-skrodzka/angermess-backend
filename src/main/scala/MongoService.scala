@@ -1,27 +1,57 @@
-import MongoClientProvider.*
 import org.bson.Document
-import scala.jdk.CollectionConverters.*
+
+import com.mongodb.client.model.Aggregates._
+import com.mongodb.client.model.Sorts._
+import com.mongodb.client.model.Accumulators._
+import scala.jdk.CollectionConverters._
+
+import spray.json.*
+import spray.json.DefaultJsonProtocol.*
+
+given roomFormat: RootJsonFormat[Map[String, String]] = mapFormat[String, String]
+given roomListFormat: RootJsonFormat[List[Map[String, String]]] = listFormat(roomFormat)
 
 object MongoService:
   def insert(json: String, room: String): Unit =
-    try
+    try {
       val doc = Document.parse(json)
       doc.put("room", room)
-      messages.insertOne(doc)
-    catch case e: Exception => println(s"Insert failed: ${e.getMessage}")
-
-  def loadHistory(room: String, limit: Int = 10): List[String] =
-    println(s"Loading history for room: $room")
-    try
-      messages.find(new Document("room", room))
-        .sort(new Document("_id", -1))
-        .limit(limit)
-        .into(new java.util.ArrayList[Document]())
-        .asScala
-        .toList
-        .reverse
-        .map(_.toJson())
-    catch
+      MongoClientProvider.messages.insertOne(doc)
+      println(s"Saved to MongoDB")
+    } catch {
       case e: Exception =>
-        println(s"History load error: ${e.getMessage}")
-        List()
+        println(s"Mongo insert error: ${e.getMessage}")
+    }
+
+
+  def loadHistory(room: String): List[String] =
+    import scala.jdk.CollectionConverters._
+    MongoClientProvider.messages
+      .find(new Document("room", room))
+      .sort(new Document("_id", -1))
+      .limit(10)
+      .into(new java.util.ArrayList[Document]())
+      .asScala
+      .toList
+      .reverse
+      .map(_.toJson())
+
+  def getRoomSummaries: List[Map[String, String]] =
+    val pipeline = List(
+      sort(descending("timestamp")),
+      group("$room", first("last", "$text"))
+    ).asJava
+
+    val results = MongoClientProvider
+      .messages
+      .aggregate(pipeline)
+      .asScala
+      .toList
+
+    results.map { doc =>
+      Map(
+        "name" -> doc.get("_id").toString,
+        "last" -> doc.getString("last")
+      )
+    }
+
