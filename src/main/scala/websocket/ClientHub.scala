@@ -1,3 +1,5 @@
+package websocket
+
 import akka.http.scaladsl.model.ws.Message
 import akka.stream.scaladsl.SourceQueueWithComplete
 

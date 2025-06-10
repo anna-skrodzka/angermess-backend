@@ -1,3 +1,5 @@
+package mongo
+
 import com.mongodb.client.{MongoClient, MongoClients, MongoCollection, MongoDatabase}
 import org.bson.Document
 

@@ -1,12 +1,14 @@
+package mongo
+
+import com.mongodb.client.model.Accumulators.*
+import com.mongodb.client.model.Aggregates.*
+import com.mongodb.client.model.Sorts.*
+import mongo.MongoClientProvider
 import org.bson.Document
-
-import com.mongodb.client.model.Aggregates._
-import com.mongodb.client.model.Sorts._
-import com.mongodb.client.model.Accumulators._
-import scala.jdk.CollectionConverters._
-
 import spray.json.*
 import spray.json.DefaultJsonProtocol.*
+
+import scala.jdk.CollectionConverters.*
 
 given roomFormat: RootJsonFormat[Map[String, String]] = mapFormat[String, String]
 given roomListFormat: RootJsonFormat[List[Map[String, String]]] = listFormat(roomFormat)
@@ -25,7 +27,7 @@ object MongoService:
 
 
   def loadHistory(room: String): List[String] =
-    import scala.jdk.CollectionConverters._
+    import scala.jdk.CollectionConverters.*
     MongoClientProvider.messages
       .find(new Document("room", room))
       .sort(new Document("_id", -1))
