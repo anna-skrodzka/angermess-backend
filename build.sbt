@@ -13,3 +13,14 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-spray-json" % "10.5.3",
   "org.mindrot" % "jbcrypt" % "0.4"
 )
+
+enablePlugins(ScalafixPlugin)
+
+inThisBuild(
+  List(
+    scalaVersion := "3.3.6",
+    semanticdbEnabled := true,
+    semanticdbVersion := scalafixSemanticdb.revision,
+    scalacOptions += "-Yretain-trees"
+  )
+)

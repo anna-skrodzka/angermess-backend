@@ -23,8 +23,8 @@ class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext):
 
   def register(req: RegisterRequest): Future[Either[String, AuthResult]] = Future {
     val nick = req.nickname.trim.toLowerCase
-    val existing = users.find(Filters.eq("nickname", nick)).first()
-    if existing != null && existing.get("nickname") != null then
+    val existingOpt = Option(users.find(Filters.eq("nickname", nick)).first())
+    if existingOpt.flatMap(doc => Option(doc.get("nickname"))).isDefined then
       Left("Nickname already taken")
     else
       val userId = UUID.randomUUID().toString
@@ -42,15 +42,17 @@ class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext):
 
   def login(req: LoginRequest): Future[Either[String, AuthResult]] = Future {
     val nick = req.nickname.trim.toLowerCase
-    val user = users.find(Filters.eq("nickname", nick)).first()
-    if user == null then Left("Invalid credentials")
-    else
-      val hash = user.getString("passwordHash")
-      if BCrypt.checkpw(req.password, hash) then
-        val token = UUID.randomUUID().toString
-        sessionStore.save(token, user.getString("_id"))
-        Right(AuthResult(token))
-      else Left("Invalid credentials")
+    val userOpt = Option(users.find(Filters.eq("nickname", nick)).first())
+    userOpt match
+      case Some(user) =>
+        val hash = user.getString("passwordHash")
+        if BCrypt.checkpw(req.password, hash) then
+          val token = UUID.randomUUID().toString
+          sessionStore.save(token, user.getString("_id"))
+          Right(AuthResult(token))
+        else Left("Invalid credentials")
+      case None =>
+        Left("Invalid credentials")
   }
 
   def logout(token: String): Future[Unit] = Future {
