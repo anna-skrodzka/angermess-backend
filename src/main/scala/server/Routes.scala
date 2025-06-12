@@ -6,13 +6,22 @@ import akka.http.scaladsl.server.Directives.*
 import akka.http.scaladsl.server.Route
 import akka.stream.Materializer
 import mongo.MongoService
+import server.auth.{AuthRoutes, UserService}
+import server.session.UserSessionStore
 import spray.json.*
 import spray.json.DefaultJsonProtocol.given
 import util.CorsSupport
 import websocket.WebSocketHandler
 
+import scala.concurrent.ExecutionContext
+
 object Routes {
-  def allRoutes(using system: ActorSystem, mat: Materializer): Route = CorsSupport.withCors {
+  
+  def allRoutes(using system: ActorSystem, mat: Materializer, ec: ExecutionContext): Route = CorsSupport.withCors {
+    val sessionStore = new UserSessionStore()
+    val userService = new UserService(sessionStore)(using ec)
+    val authRoutes = new AuthRoutes(userService)(using ec)
+    
     concat(
       path("ws-chat") {
         parameter("room".?) { maybeRoom =>
@@ -27,6 +36,7 @@ object Routes {
           complete(HttpEntity(ContentTypes.`application/json`, json))
         }
       },
+      authRoutes.routes,
       options {
         complete("OK")
       }

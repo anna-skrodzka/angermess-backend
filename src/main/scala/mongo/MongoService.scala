@@ -3,7 +3,6 @@ package mongo
 import com.mongodb.client.model.Accumulators.*
 import com.mongodb.client.model.Aggregates.*
 import com.mongodb.client.model.Sorts.*
-import mongo.MongoClientProvider
 import org.bson.Document
 import spray.json.*
 import spray.json.DefaultJsonProtocol.*
@@ -15,19 +14,19 @@ given roomListFormat: RootJsonFormat[List[Map[String, String]]] = listFormat(roo
 
 object MongoService:
   def insert(json: String, room: String): Unit =
-    try {
+    try
       val doc = Document.parse(json)
-      doc.put("room", room)
-      MongoClientProvider.messages.insertOne(doc)
-      println(s"Saved to MongoDB")
-    } catch {
+      if !doc.containsKey("text") then
+        println("Skipping insert: missing 'text'")
+      else
+        doc.put("room", room)
+        MongoClientProvider.messages.insertOne(doc)
+        println(s"Saved to MongoDB")
+    catch
       case e: Exception =>
         println(s"Mongo insert error: ${e.getMessage}")
-    }
-
 
   def loadHistory(room: String): List[String] =
-    import scala.jdk.CollectionConverters.*
     MongoClientProvider.messages
       .find(new Document("room", room))
       .sort(new Document("_id", -1))
