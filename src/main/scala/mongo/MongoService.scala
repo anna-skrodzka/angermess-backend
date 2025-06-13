@@ -17,14 +17,20 @@ object MongoService:
     try
       val doc = Document.parse(json)
       if !doc.containsKey("text") then
-        println("Skipping insert: missing 'text'")
+        println("[Mongo] Skipping insert: missing 'text'")
+      else if !doc.containsKey("author") then
+        println("[Mongo] Skipping insert: missing 'author'")
+      else if !doc.containsKey("room") then
+        println("[Mongo] Skipping insert: missing 'room'")
       else
-        doc.put("room", room)
         MongoClientProvider.messages.insertOne(doc)
-        println(s"Saved to MongoDB")
+        val author = doc.get("author").asInstanceOf[org.bson.Document]
+        val nickname = author.getString("nickname")
+        val roomName = doc.getString("room")
+        println(s"[Mongo] Inserted message from $nickname in room $roomName")
     catch
       case e: Exception =>
-        println(s"Mongo insert error: ${e.getMessage}")
+        println(s"[Mongo insert error] ${e.getMessage}")
 
   def loadHistory(room: String): List[String] =
     MongoClientProvider.messages
