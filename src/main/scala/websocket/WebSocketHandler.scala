@@ -6,33 +6,33 @@ import akka.stream.{Materializer, OverflowStrategy}
 import akka.NotUsed
 import mongo.MongoService
 import spray.json.*
-
 import scala.concurrent.ExecutionContext
 import java.time.Instant
 
 object WebSocketHandler:
   def websocketFlow(room: String)(using mat: Materializer, ec: ExecutionContext): Flow[Message, Message, Any] =
-    val flow = Flow[Message]
-      .prefixAndTail(1)
-      .flatMapConcat {
-        case (Seq(TextMessage.Strict(authMsg)), tail) =>
-          val token = authMsg.parseJson.asJsObject.fields.get("token").collect {
-            case JsString(value) => value
-          }
+    val in: Sink[Message, NotUsed] =
+      Flow[Message]
+        .prefixAndTail(1)
+        .flatMapConcat {
+          case (Seq(TextMessage.Strict(authMsg)), tail) =>
+            val authData = authMsg.parseJson.asJsObject
+            val tokenOpt = authData.fields.get("token").collect { case JsString(t) => t }
 
-          token match
-            case Some(t) =>
-              val userId = "mock-user-id"
-              val nickname = "mock-nickname"
+            tokenOpt match
+              case Some(token) =>
+                
+                val userId = "mock-user-id"       // позже вставишь UUID из БД
+                val nickname = "mock-nickname"    // или вытащишь через UserService
 
-              tail
-                .collect {
-                  case TextMessage.Strict(jsonStr) =>
-                    val parsed = jsonStr.parseJson.asJsObject
-                    parsed.fields.get("text").collect {
-                      case JsString(t) =>
+                tail
+                  .collect {
+                    case TextMessage.Strict(jsonStr) =>
+                      val parsed = jsonStr.parseJson.asJsObject
+                      val textOpt = parsed.fields.get("text").collect { case JsString(t) => t }
+                      textOpt.map { text =>
                         JsObject(
-                          "text" -> JsString(t),
+                          "text" -> JsString(text),
                           "timestamp" -> JsString(Instant.now.toString),
                           "room" -> JsString(room),
                           "author" -> JsObject(
@@ -40,25 +40,35 @@ object WebSocketHandler:
                             "nickname" -> JsString(nickname)
                           )
                         ).compactPrint
-                    }
-                }
-                .collect { case Some(json) => TextMessage.Strict(json) }
+                      }
+                  }
+                  .collect { case Some(enrichedJson) => enrichedJson }
+                  .to(Sink.foreach { enrichedJson =>
+                    MongoService.insert(enrichedJson, room)
+                    ClientHub.broadcast(room, TextMessage.Strict(enrichedJson))
+                  })
+                  .run()
 
-            case None =>
-              println("[auth error] Invalid or missing token")
-              Source.empty
+                Source.maybe
 
-        case _ =>
-          println("[ws] Invalid initial message")
-          Source.empty
-      }
+              case None =>
+                println("[auth error] Invalid or missing token")
+                Source.empty
 
-    val history = MongoService.loadHistory(room).map(TextMessage.Strict(_))
-    val historySource = Source(history)
+          case _ =>
+            println("[ws] Invalid initial message")
+            Source.empty
+        }
+        .to(Sink.ignore)
 
-    val (queue, liveSource) = Source.queue[Message](16, OverflowStrategy.dropHead).preMaterialize()
+    val history = MongoService.loadHistory(room)
+    val historySource = Source(history.map(TextMessage.Strict.apply))
+
+    val (queue, liveSource) =
+      Source.queue[Message](10, OverflowStrategy.dropHead).preMaterialize()
+
     ClientHub.register(room, queue)
 
     val out = historySource.concat(liveSource)
 
-    Flow.fromSinkAndSource(flow.to(Sink.ignore), out)
+    Flow.fromSinkAndSource(in, out)
