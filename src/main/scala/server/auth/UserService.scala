@@ -4,6 +4,7 @@ import com.mongodb.client.model.Filters
 import com.mongodb.client.MongoCollection
 import mongo.MongoClientProvider
 import org.bson.Document
+import org.bson.types.ObjectId
 import server.session.UserSessionStore
 import org.mindrot.jbcrypt.BCrypt
 
@@ -65,3 +66,25 @@ class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext):
       Option(user)
     }
   }
+
+  def findUserByToken(token: String)(using ec: ExecutionContext): Future[Option[(String, String)]] =
+    sessionStore.get(token) match
+      case Some(userId) =>
+        getNicknameById(userId).map {
+          case Some(nickname) => Some(userId -> nickname)
+          case None => None
+        }
+      case None =>
+        Future.successful(None)
+
+  def getNicknameById(userId: String)(using ec: ExecutionContext): Future[Option[String]] =
+    Future {
+      val doc = users
+        .find(Filters.eq("_id", userId))
+        .first()
+      Option(doc).map(_.getString("nickname"))
+    }.recover {
+      case e: Exception =>
+        println(s"Failed to get nickname: ${e.getMessage}")
+        None
+    }
