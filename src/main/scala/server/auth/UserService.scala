@@ -79,11 +79,9 @@ class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext):
 
   def getNicknameById(userId: String)(using ec: ExecutionContext): Future[Option[String]] =
     Future {
-      val objId = new ObjectId(userId)
       val doc = users
         .find(Filters.eq("_id", userId))
         .first()
-        .asInstanceOf[Document]
       Option(doc).map(_.getString("nickname"))
     }.recover {
       case e: Exception =>

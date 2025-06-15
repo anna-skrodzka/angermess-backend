@@ -3,14 +3,16 @@ package websocket
 import akka.http.scaladsl.model.ws.*
 import akka.stream.scaladsl.*
 import akka.stream.{Materializer, OverflowStrategy}
-import akka.NotUsed
+import akka.{Done, NotUsed}
 import mongo.MongoService
+import server.auth.UserService
 import spray.json.*
+
 import scala.concurrent.ExecutionContext
 import java.time.Instant
 
 object WebSocketHandler:
-  def websocketFlow(room: String)(using mat: Materializer, ec: ExecutionContext): Flow[Message, Message, Any] =
+  def websocketFlow(room: String, userService: UserService)(using mat: Materializer, ec: ExecutionContext): Flow[Message, Message, Any] =
     val in: Sink[Message, NotUsed] =
       Flow[Message]
         .prefixAndTail(1)
@@ -21,42 +23,43 @@ object WebSocketHandler:
 
             tokenOpt match
               case Some(token) =>
-                
-                val userId = "mock-user-id"       // позже вставишь UUID из БД
-                val nickname = "mock-nickname"    // или вытащишь через UserService
+                val userFuture = userService.findUserByToken(token)
 
-                tail
-                  .collect {
-                    case TextMessage.Strict(jsonStr) =>
-                      val parsed = jsonStr.parseJson.asJsObject
-                      val textOpt = parsed.fields.get("text").collect { case JsString(t) => t }
-                      textOpt.map { text =>
-                        JsObject(
-                          "text" -> JsString(text),
-                          "timestamp" -> JsString(Instant.now.toString),
-                          "room" -> JsString(room),
-                          "author" -> JsObject(
-                            "id" -> JsString(userId),
-                            "nickname" -> JsString(nickname)
-                          )
-                        ).compactPrint
+                Source.future(userFuture).flatMapConcat {
+                  case Some((userId, nickname)) =>
+                    tail
+                      .collect {
+                        case TextMessage.Strict(jsonStr) =>
+                          val parsed = jsonStr.parseJson.asJsObject
+                          val textOpt = parsed.fields.get("text").collect { case JsString(t) => t }
+
+                          textOpt.map { text =>
+                            JsObject(
+                              "text" -> JsString(text),
+                              "timestamp" -> JsString(Instant.now.toString),
+                              "room" -> JsString(room),
+                              "author" -> JsObject(
+                                "id" -> JsString(userId),
+                                "nickname" -> JsString(nickname)
+                              )
+                            ).compactPrint
+                          }
                       }
-                  }
-                  .collect { case Some(enrichedJson) => enrichedJson }
-                  .to(Sink.foreach { enrichedJson =>
-                    MongoService.insert(enrichedJson, room)
-                    ClientHub.broadcast(room, TextMessage.Strict(enrichedJson))
-                  })
-                  .run()
-
-                Source.maybe
-
+                      .collect { case Some(enrichedJson) => enrichedJson }
+                      .map { enrichedJson =>
+                        MongoService.insert(enrichedJson, room)
+                        ClientHub.broadcast(room, TextMessage.Strict(enrichedJson))
+                        Done
+                      }
+                  case None =>
+                    println(s"[auth error] Invalid token: $token")
+                    Source.empty
+                }
               case None =>
-                println("[auth error] Invalid or missing token")
+                println("[auth error] Token missing in initial message")
                 Source.empty
-
           case _ =>
-            println("[ws] Invalid initial message")
+            println("[ws] Invalid initial WebSocket message")
             Source.empty
         }
         .to(Sink.ignore)

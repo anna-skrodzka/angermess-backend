@@ -26,7 +26,7 @@ object Routes {
       path("ws-chat") {
         parameter("room".?) { maybeRoom =>
           val room = maybeRoom.getOrElse("default")
-          handleWebSocketMessages(WebSocketHandler.websocketFlow(room))
+          handleWebSocketMessages(WebSocketHandler.websocketFlow(room, userService))
         }
       },
       path("rooms") {
