@@ -29,6 +29,16 @@ object Routes {
           handleWebSocketMessages(WebSocketHandler.websocketFlow(room, userService))
         }
       },
+      path("history") {
+        parameters("room", "offset".as[Int].?, "limit".as[Int].?) { (room, offsetOpt, limitOpt) =>
+          get {
+            val offset = offsetOpt.getOrElse(0)
+            val limit = limitOpt.getOrElse(10)
+            val history = MongoService.loadHistory(room, offset, limit)
+            complete(HttpEntity(ContentTypes.`application/json`, history.toJson.compactPrint))
+          }
+        }
+      },
       path("rooms") {
         get {
           val summaries = MongoService.getRoomSummaries

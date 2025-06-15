@@ -32,15 +32,15 @@ object MongoService:
       case e: Exception =>
         println(s"[Mongo insert error] ${e.getMessage}")
 
-  def loadHistory(room: String): List[String] =
+  def loadHistory(room: String, offset: Int = 0, limit: Int = 10): List[String] =
     MongoClientProvider.messages
       .find(new Document("room", room))
       .sort(new Document("_id", -1))
-      .limit(10)
+      .skip(offset)
+      .limit(limit)
       .into(new java.util.ArrayList[Document]())
       .asScala
       .toList
-      .reverse
       .map(_.toJson())
 
   def getRoomSummaries: List[Map[String, String]] =
