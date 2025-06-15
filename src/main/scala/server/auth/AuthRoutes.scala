@@ -61,18 +61,19 @@ class AuthRoutes(userService: UserService)(using ec: ExecutionContext):
                 val token = header.stripPrefix("Bearer ").trim
                 onSuccess(userService.me(token)) {
                   case Some(user) =>
+                    val id = user.getString("_id")
                     val nick = user.getString("nickname")
                     val createdAt = user.getString("createdAt")
-                    complete(HttpEntity(ContentTypes.`application/json`,
-                      s"""{"nickname":"$nick","createdAt":"$createdAt"}"""
+                    complete(JsObject(
+                      "_id" -> JsString(id),
+                      "nickname" -> JsString(nick),
+                      "createdAt" -> JsString(createdAt)
                     ))
                   case None =>
                     complete(StatusCodes.Unauthorized, Errors.invalidToken)
                 }
-
               case Some(_) =>
                 complete(StatusCodes.BadRequest, Errors.malformedHeader)
-
               case None =>
                 complete(StatusCodes.Unauthorized, Errors.missingHeader)
             }

@@ -4,7 +4,6 @@ import com.mongodb.client.model.Filters
 import com.mongodb.client.MongoCollection
 import mongo.MongoClientProvider
 import org.bson.Document
-import org.bson.types.ObjectId
 import server.session.UserSessionStore
 import org.mindrot.jbcrypt.BCrypt
 
