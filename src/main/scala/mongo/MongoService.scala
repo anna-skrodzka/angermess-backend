@@ -2,12 +2,10 @@ package mongo
 
 import com.mongodb.client.model.Accumulators.*
 import com.mongodb.client.model.Aggregates.*
-import com.mongodb.client.model.Filters
+import com.mongodb.client.model.{Filters, Sorts}
 import com.mongodb.client.model.Sorts.*
 import org.apache.logging.log4j.LogManager
 import org.bson.Document
-import spray.json.*
-import spray.json.DefaultJsonProtocol.*
 import util.Logging
 
 import java.time.Instant
@@ -16,8 +14,7 @@ import scala.concurrent.Future
 import scala.jdk.CollectionConverters.*
 import scala.concurrent.ExecutionContext.Implicits.global
 
-given roomFormat: RootJsonFormat[Map[String, String]] = mapFormat[String, String]
-given roomListFormat: RootJsonFormat[List[Map[String, String]]] = listFormat(roomFormat)
+case class RoomSummary(name: String, last: String, author: String)
 
 object MongoService extends Logging:
   private val logger = LogManager.getLogger(getClass)
@@ -44,7 +41,7 @@ object MongoService extends Logging:
   def loadHistory(room: String, offset: Int = 0, limit: Int = 10): List[String] =
     MongoClientProvider.messages
       .find(new Document("room", room))
-      .sort(new Document("_id", -1))
+      .sort(Sorts.ascending("timestamp"))
       .skip(offset)
       .limit(limit)
       .into(new java.util.ArrayList[Document]())
@@ -52,10 +49,16 @@ object MongoService extends Logging:
       .toList
       .map(_.toJson())
 
-  def getRoomSummaries: List[Map[String, String]] =
+  def getRoomSummaries: List[RoomSummary] =
     val pipeline = List(
       sort(descending("timestamp")),
-      group("$room", first("last", "$text"))
+      group(
+        "$room",
+        first("last", "$text"),
+        first("author", "$author.nickname"),
+        first("ts", "$timestamp")
+      ),
+      sort(descending("ts"))
     ).asJava
 
     val results = MongoClientProvider
@@ -65,9 +68,10 @@ object MongoService extends Logging:
       .toList
 
     results.map { doc =>
-      Map(
-        "name" -> doc.get("_id").toString,
-        "last" -> doc.getString("last")
+      RoomSummary(
+        doc.get("_id").toString,
+        doc.getString("last"),
+        doc.getString("author")
       )
     }
 
@@ -80,6 +84,18 @@ object MongoService extends Logging:
       .append("isPrivate", false)
 
     MongoClientProvider.rooms.insertOne(doc)
+
+    val sysMsg = new Document()
+      .append("_id", UUID.randomUUID().toString)
+      .append("author", new Document()
+        .append("id", "1")
+        .append("nickname", "system"))
+      .append("room", name)
+      .append("text", s"new room '$name' registered")
+      .append("timestamp", Instant.now.toString)
+
+    MongoClientProvider.messages.insertOne(sysMsg)
+
     logger.info(s"Room '$name' created by user $creatorId")
     true
   }.recover {
@@ -94,9 +110,17 @@ object MongoService extends Logging:
 
     roomOpt.exists { room =>
       val isOwner = Option(room.getString("creatorId")).contains(requesterId)
-      if isOwner then
+      val roomNameOpt = Option(room.getString("name"))
+
+      if isOwner && roomNameOpt.isDefined then
+        val roomName = roomNameOpt.get
+
         MongoClientProvider.rooms.deleteOne(filter)
-        logger.info(s"Room $roomId deleted by user $requesterId")
+
+        val messageFilter = Filters.eq("room", roomName)
+        val deleted = MongoClientProvider.messages.deleteMany(messageFilter)
+        logger.info(s"Room $roomId deleted by user $requesterId. Messages removed: ${deleted.getDeletedCount}")
+
         true
       else
         logger.warn(s"Unauthorized delete attempt: user $requesterId tried to delete room $roomId")

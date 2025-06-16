@@ -5,19 +5,22 @@ import akka.http.scaladsl.model.*
 import akka.http.scaladsl.server.Directives.*
 import akka.http.scaladsl.server.Route
 import akka.stream.Materializer
-import mongo.MongoService
+import mongo.{MongoService, RoomSummary}
 import server.auth.{AuthRoutes, UserService}
 import server.session.UserSessionStore
 import spray.json.*
-import spray.json.DefaultJsonProtocol.given
+import spray.json.DefaultJsonProtocol.{jsonFormat3, listFormat, given}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
 import util.CorsSupport
 import websocket.WebSocketHandler
 
 import scala.concurrent.ExecutionContext
 
+given roomSummaryFormat: RootJsonFormat[RoomSummary] = jsonFormat3(RoomSummary.apply)
+given roomListFormat: RootJsonFormat[List[RoomSummary]] = listFormat(roomSummaryFormat)
+
 object Routes {
-  
+
   def allRoutes(using system: ActorSystem, mat: Materializer, ec: ExecutionContext): Route = CorsSupport.withCors {
     val sessionStore = new UserSessionStore()
     val userService = new UserService(sessionStore)(using ec)

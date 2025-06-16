@@ -77,7 +77,7 @@ class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext) ex
       case None =>
         Future.successful(None)
 
-  def getNicknameById(userId: String)(using ec: ExecutionContext): Future[Option[String]] =
+  private def getNicknameById(userId: String)(using ec: ExecutionContext): Future[Option[String]] =
     Future {
       val doc = users
         .find(Filters.eq("_id", userId))
