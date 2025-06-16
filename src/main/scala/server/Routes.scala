@@ -10,7 +10,7 @@ import server.auth.{AuthRoutes, UserService}
 import server.session.UserSessionStore
 import spray.json.*
 import spray.json.DefaultJsonProtocol.{jsonFormat3, listFormat, given}
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
+import server.rooms.RoomsRoutes
 import util.CorsSupport
 import websocket.WebSocketHandler
 
@@ -24,7 +24,6 @@ object Routes {
   def allRoutes(using system: ActorSystem, mat: Materializer, ec: ExecutionContext): Route = CorsSupport.withCors {
     val sessionStore = new UserSessionStore()
     val userService = new UserService(sessionStore)(using ec)
-    val authRoutes = new AuthRoutes(userService)(using ec)
 
     concat(
       path("ws-chat") {
@@ -43,67 +42,8 @@ object Routes {
           }
         }
       },
-      path("rooms") {
-        get {
-          val summaries = MongoService.getRoomSummaries
-          val json = summaries.toJson.compactPrint
-          complete(HttpEntity(ContentTypes.`application/json`, json))
-        }
-      },
-      path("rooms" / "search") {
-        get {
-          parameters("q") { query =>
-            val results = MongoService.searchRooms(query)
-            complete(HttpEntity(ContentTypes.`application/json`, results.toJson.compactPrint))}
-        }
-      },
-      path("rooms" / "create") {
-        post {
-          entity(as[JsObject]) { json =>
-            val maybeName = json.fields.get("name").collect { case JsString(s) => s }
-            val maybeToken = json.fields.get("token").collect { case JsString(s) => s }
-
-            (maybeName, maybeToken) match {
-              case (Some(name), Some(token)) =>
-                onSuccess(userService.findUserByToken(token)) {
-                  case Some((userId, _)) =>
-                    onSuccess(MongoService.createRoom(name, userId)) {
-                      case true  => complete(StatusCodes.OK)
-                      case false => complete(StatusCodes.InternalServerError, "Failed to create room")
-                    }
-                  case None =>
-                    complete(StatusCodes.Unauthorized, "Invalid token")
-                }
-              case _ =>
-                complete(StatusCodes.BadRequest, "Missing name or token")
-            }
-          }
-        }
-      },
-      path("rooms" / "delete") {
-        post {
-          entity(as[JsObject]) { json =>
-            val maybeRoomId = json.fields.get("roomId").collect { case JsString(s) => s }
-            val maybeToken  = json.fields.get("token").collect { case JsString(s) => s }
-
-            (maybeRoomId, maybeToken) match {
-              case (Some(roomId), Some(token)) =>
-                onSuccess(userService.findUserByToken(token)) {
-                  case Some((userId, _)) =>
-                    onSuccess(MongoService.deleteRoom(roomId, userId)) {
-                      case true  => complete(StatusCodes.OK)
-                      case false => complete(StatusCodes.Forbidden, "Cannot delete room")
-                    }
-                  case None =>
-                    complete(StatusCodes.Unauthorized, "Invalid token")
-                }
-              case _ =>
-                complete(StatusCodes.BadRequest, "Missing roomId or token")
-            }
-          }
-        }
-      },
-      authRoutes.routes,
+      RoomsRoutes.routes(using ec, userService),
+      AuthRoutes.routes(using ec, userService),
       options {
         complete("OK")
       }

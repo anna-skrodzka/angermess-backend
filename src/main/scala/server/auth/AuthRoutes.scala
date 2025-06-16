@@ -15,8 +15,8 @@ given registerRequestFormat: RootJsonFormat[RegisterRequest] = DefaultJsonProtoc
 given loginRequestFormat: RootJsonFormat[LoginRequest] = DefaultJsonProtocol.jsonFormat2(LoginRequest.apply)
 given authResultFormat: RootJsonFormat[AuthResult] = DefaultJsonProtocol.jsonFormat1(AuthResult.apply)
 
-class AuthRoutes(userService: UserService)(using ec: ExecutionContext):
-  val routes: Route =
+object AuthRoutes:
+  def routes(using ec: ExecutionContext, userService: UserService): Route =
     pathPrefix("auth") {
       concat(
         path("register") {
