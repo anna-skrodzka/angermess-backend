@@ -7,11 +7,12 @@ import akka.{Done, NotUsed}
 import mongo.MongoService
 import server.auth.UserService
 import spray.json.*
+import util.Logging
 
 import scala.concurrent.ExecutionContext
 import java.time.Instant
 
-object WebSocketHandler:
+object WebSocketHandler extends Logging:
   def websocketFlow(room: String, userService: UserService)(using mat: Materializer, ec: ExecutionContext): Flow[Message, Message, Any] =
     val in: Sink[Message, NotUsed] =
       Flow[Message]
@@ -27,6 +28,7 @@ object WebSocketHandler:
 
                 Source.future(userFuture).flatMapConcat {
                   case Some((userId, nickname)) =>
+                    logger.info(s"User authenticated: $nickname ($userId) in room '$room'")
                     tail
                       .collect {
                         case TextMessage.Strict(jsonStr) =>
@@ -52,14 +54,14 @@ object WebSocketHandler:
                         Done
                       }
                   case None =>
-                    println(s"[auth error] Invalid token: $token")
+                    logger.warn(s"[WebSocket] Invalid token received: $token")
                     Source.empty
                 }
               case None =>
-                println("[auth error] Token missing in initial message")
+                logger.warn("[WebSocket] Token missing in initial message")
                 Source.empty
           case _ =>
-            println("[ws] Invalid initial WebSocket message")
+            logger.warn("[WebSocket] Invalid initial WebSocket message received")
             Source.empty
         }
         .to(Sink.ignore)
