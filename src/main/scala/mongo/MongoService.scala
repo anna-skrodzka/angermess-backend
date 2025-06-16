@@ -13,6 +13,7 @@ import java.util.UUID
 import scala.concurrent.Future
 import scala.jdk.CollectionConverters.*
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.matching.Regex
 
 case class RoomSummary(name: String, last: String, author: String)
 
@@ -131,3 +132,30 @@ object MongoService extends Logging:
       logger.error(s"Room deletion error: ${e.getMessage}", e)
       false
   }
+
+  def searchRooms(query: String): List[RoomSummary] =
+    val pipeline = List(
+      `match`(Filters.regex("room", s".*${Regex.quote(query)}.*", "i")),
+      sort(descending("timestamp")),
+      group(
+        "$room",
+        first("last", "$text"),
+        first("author", "$author.nickname"),
+        first("ts", "$timestamp")
+      ),
+      sort(descending("ts"))
+    ).asJava
+
+    val results = MongoClientProvider
+      .messages
+      .aggregate(pipeline)
+      .asScala
+      .toList
+
+    results.map { doc =>
+      RoomSummary(
+        doc.getString("_id"),
+        Option(doc.getString("last")).getOrElse(""),
+        Option(doc.getString("author")).getOrElse("system")
+      )
+    }

@@ -25,7 +25,7 @@ object Routes {
     val sessionStore = new UserSessionStore()
     val userService = new UserService(sessionStore)(using ec)
     val authRoutes = new AuthRoutes(userService)(using ec)
-    
+
     concat(
       path("ws-chat") {
         parameter("room".?) { maybeRoom =>
@@ -48,6 +48,13 @@ object Routes {
           val summaries = MongoService.getRoomSummaries
           val json = summaries.toJson.compactPrint
           complete(HttpEntity(ContentTypes.`application/json`, json))
+        }
+      },
+      path("rooms" / "search") {
+        get {
+          parameters("q") { query =>
+            val results = MongoService.searchRooms(query)
+            complete(HttpEntity(ContentTypes.`application/json`, results.toJson.compactPrint))}
         }
       },
       path("rooms" / "create") {
