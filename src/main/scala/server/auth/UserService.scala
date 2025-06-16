@@ -6,6 +6,7 @@ import mongo.MongoClientProvider
 import org.bson.Document
 import server.session.UserSessionStore
 import org.mindrot.jbcrypt.BCrypt
+import util.Logging
 
 import java.time.Instant
 import java.util.UUID
@@ -16,7 +17,7 @@ case class RegisterRequest(nickname: String, password: String)
 case class LoginRequest(nickname: String, password: String)
 case class AuthResult(token: String)
 
-class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext):
+class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext) extends Logging:
 
   private val users: MongoCollection[Document] =
     MongoClientProvider.database.getCollection("users")
@@ -84,6 +85,6 @@ class UserService(sessionStore: UserSessionStore)(using ec: ExecutionContext):
       Option(doc).map(_.getString("nickname"))
     }.recover {
       case e: Exception =>
-        println(s"Failed to get nickname: ${e.getMessage}")
+        logger.error(s"Failed to get nickname: ${e.getMessage}", e)
         None
     }
