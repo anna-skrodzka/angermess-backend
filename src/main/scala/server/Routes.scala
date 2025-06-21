@@ -9,14 +9,14 @@ import mongo.{MongoService, RoomSummary}
 import server.auth.{AuthRoutes, UserService}
 import server.session.UserSessionStore
 import spray.json.*
-import spray.json.DefaultJsonProtocol.{jsonFormat3, listFormat, given}
+import spray.json.DefaultJsonProtocol.{jsonFormat4, listFormat, given}
 import server.rooms.RoomsRoutes
 import util.CorsSupport
 import websocket.WebSocketHandler
 
 import scala.concurrent.ExecutionContext
 
-given roomSummaryFormat: RootJsonFormat[RoomSummary] = jsonFormat3(RoomSummary.apply)
+given roomSummaryFormat: RootJsonFormat[RoomSummary] = jsonFormat4(RoomSummary.apply)
 given roomListFormat: RootJsonFormat[List[RoomSummary]] = listFormat(roomSummaryFormat)
 
 object Routes {

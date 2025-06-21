@@ -15,7 +15,7 @@ import scala.jdk.CollectionConverters.*
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.matching.Regex
 
-case class RoomSummary(name: String, last: String, author: String)
+case class RoomSummary(name: String, last: String, author: String, timestamp: String)
 
 object MongoService extends Logging:
   private val logger = LogManager.getLogger(getClass)
@@ -72,7 +72,8 @@ object MongoService extends Logging:
       RoomSummary(
         doc.get("_id").toString,
         doc.getString("last"),
-        doc.getString("author")
+        doc.getString("author"),
+        doc.getString("ts")
       )
     }
 
@@ -156,6 +157,7 @@ object MongoService extends Logging:
       RoomSummary(
         doc.getString("_id"),
         Option(doc.getString("last")).getOrElse(""),
-        Option(doc.getString("author")).getOrElse("system")
+        Option(doc.getString("author")).getOrElse("system"),
+        Option(doc.getString("ts")).getOrElse(Instant.now.toString)
       )
     }

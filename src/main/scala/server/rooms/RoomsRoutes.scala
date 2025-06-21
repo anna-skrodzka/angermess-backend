@@ -6,12 +6,12 @@ import akka.http.scaladsl.server.Route
 import mongo.{MongoService, RoomSummary}
 import server.auth.UserService
 import spray.json._
-import spray.json.DefaultJsonProtocol.{jsonFormat3, listFormat, given}
+import spray.json.DefaultJsonProtocol.{jsonFormat4, listFormat, given}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 import scala.concurrent.ExecutionContext
 
-given roomSummaryFormat: RootJsonFormat[RoomSummary] = jsonFormat3(RoomSummary.apply)
+given roomSummaryFormat: RootJsonFormat[RoomSummary] = jsonFormat4(RoomSummary.apply)
 given roomListFormat: RootJsonFormat[List[RoomSummary]] = listFormat(roomSummaryFormat)
 
 object RoomsRoutes:
