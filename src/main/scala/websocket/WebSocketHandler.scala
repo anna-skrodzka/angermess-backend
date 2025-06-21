@@ -51,6 +51,24 @@ object WebSocketHandler extends Logging:
                       .map { enrichedJson =>
                         MongoService.insert(enrichedJson, room)
                         ClientHub.broadcast(room, TextMessage.Strict(enrichedJson))
+
+                        val enrichedObj = enrichedJson.parseJson.asJsObject
+                        val lastText = enrichedObj.fields.get("text").collect { case JsString(t) => t }.getOrElse("")
+                        val authorName = enrichedObj.fields
+                          .get("author")
+                          .collect { case JsObject(fields) => fields.get("nickname").collect { case JsString(n) => n } }
+                          .flatten
+                          .getOrElse("unknown")
+
+                        val sidebarUpdate = JsObject(
+                          "type" -> JsString("room_update"),
+                          "room" -> JsString(room),
+                          "last" -> JsString(lastText),
+                          "author" -> JsString(authorName),
+                          "timestamp" -> JsNumber(Instant.now.toEpochMilli)
+                        ).compactPrint
+
+                        ClientHub.broadcast("__sidebar__", TextMessage.Strict(sidebarUpdate))
                         Done
                       }
                   case None =>
